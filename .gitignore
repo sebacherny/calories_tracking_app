@@ -1,0 +1,4 @@
+calories_tracking/env/
+.project
+.pydevproject
+__pycache__/

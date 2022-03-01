@@ -1,0 +1,749 @@
+<html>
+<head>
+	<meta charset="utf-8">
+	<titlMain Page</title>
+	
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+	
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+	
+	<style>
+	table {
+	  font-family: arial, sans-serif;
+	  border-collapse: collapse;
+	  width: 100%;
+	}
+	
+	td, th {
+	  border: 1px solid #dddddd;
+	  text-align: left;
+	  padding: 8px;
+	}
+	
+	tr:nth-child(even) {
+	  background-color: #dddddd;
+	}
+	
+	#first_short_div {
+		display: inline-flex;
+		width: 100%;
+	}
+	
+	#new_food_entry {
+		margin: 10px;
+	}
+	
+	#admin_report_div {
+		margin-left: 50px;
+		margin-top: 10px;
+	}
+	
+	#user_report_div {
+		margin-left: 50px;
+		margin-top: 10px;
+		max-width: 50%;
+	}
+	
+	.limit_ok {
+		background-color: darkseagreen
+	}
+	
+	.limit_warning {
+		background-color: yellow
+	}
+	
+	.limit_passed {
+		background-color: palevioletred
+	}
+	
+	</style>
+
+	<script>
+	
+	function is_admin() {
+		return "{{is_admin}}" === "True";
+	}
+	
+	function get_current_token() {
+		return new URL(document.URL).searchParams.get("token");
+	}
+	
+	function get_daily_calories_limit(user_id=-1) {
+		if (is_admin() && user_id >= 0){
+			var all_users = {{!all_users}};
+			return all_users[user_id]["calories_daily_limit"];
+		}
+		return {{calories_daily_limit}} ;
+	}
+	
+	function get_monthly_price_limit(user_id=-1) {
+		if (is_admin()){
+			var all_users = {{!all_users}};
+			return all_users[user_id]["price_monthly_limit"];
+		}
+		return {{price_monthly_limit}} ;
+	}
+	
+	function createNewFoodEntry() {
+		var info = {};	
+		info["name"] = $("#input_food_name").val();
+		info["date_eaten"] = $("#input_food_date").val();
+		info["calories"] = $("#input_food_calories").val();
+		info["price"] = $("#input_food_price").val();
+		if (is_admin()) {
+			info["user_id"] = $("#input_food_user_id").val();
+		}
+		var url = "./api/foods?token=" + get_current_token();
+		$.ajax({
+			url: url,
+	        type: "POST",
+	        data: JSON.stringify(info),
+	        success: function(ret_data) {
+	        	info["id"] = ret_data["id"];
+	        	add_entry_to_table(info);
+	        	sortTable();
+	        	filterDates();
+	        	fillUserReport();
+	        	create_modal("Created food entry!", "");
+	        },
+	        error: function(data){
+	        	create_modal("Error", "Try again or report");
+	        	console.log(data);
+	        },
+	    });
+	}
+	
+	function updateFoodEntry(entry_id, entry_info, frontend_changes_if_update_success) {
+		var url = "./api/foods/" + entry_id + "?token=" + get_current_token();
+		$.ajax({
+			url: url,
+	        type: "PUT",
+	        data: JSON.stringify(entry_info),
+	        success: function(ret_data) {
+	        	frontend_changes_if_update_success();
+	        	sortTable();
+	        	filterDates();
+	        	fillUserReport();
+	        	create_modal("Updated food entry!", "");
+	        },
+	        error: function(data){
+	        	create_modal("Error", "Try again or report");
+	        	console.log(data);
+	        },
+	    });
+	}
+	
+	function showFoods() {
+		var food_entries_list = {{!food_entries}};
+		for (var food_entry_map of food_entries_list){
+			add_entry_to_table(food_entry_map);
+		}
+		sortTableByDateDecreasing();
+	}
+	
+	function convert_date_to_format_to_show(date_str) {
+		if (date_str.includes("T")){
+			dd = date_str.split("T")[0];
+			tt = date_str.split("T")[1];
+			return dd + " " + tt + ":00";
+		} else {
+			return date_str;
+		}
+	}
+	
+	function add_entry_to_table(food_entry_map) {
+		var row = $("<tr>", {id: "tr_" + food_entry_map["id"],
+							class: "food_entry_tr"});
+		var firstTd = $("<td>", {class: "editable"});
+		$("<label>", {text: food_entry_map["name"]}).appendTo(firstTd);
+		
+		var secondTd = $("<td>", {class: "editable"});
+		$("<label>", {text: convert_date_to_format_to_show(food_entry_map["date_eaten"]),
+						}).appendTo(secondTd);
+		
+		var thirdTd = $("<td>", {class: "editable"});
+		$("<label>", {text: food_entry_map["calories"]}).appendTo(thirdTd);
+		
+		var fourthTd = $("<td>", {class: "editable"});
+		$("<label>", {text: food_entry_map["price"] || "-"}).appendTo(fourthTd);
+		firstTd.appendTo(row);
+		secondTd.appendTo(row);
+		thirdTd.appendTo(row);
+		fourthTd.appendTo(row);
+		
+		% if is_admin:
+			var userIdTd = $("<td>");
+			$("<label>", {text: food_entry_map["user_id"] || "-"}).appendTo(userIdTd);
+			userIdTd.appendTo(row);
+
+			var deleteTd = $("<td>");
+			$("<button>", {text: "X", onclick: "delete_entry(" + food_entry_map["id"] + ")"}).appendTo(deleteTd);
+			$("<button>",
+							{text: "Edit",
+							class: "edit_entry",
+							onclick: "start_edit_entry(" + food_entry_map["id"] + ")"}).appendTo(deleteTd);
+			deleteTd.appendTo(row);
+		% end
+		row.appendTo($("#all_foods_table"));
+	}
+	
+	function delete_entry(entry_id) {
+		% if not is_admin:
+			create_modal("Error 400", "Unable to perform operation");
+			return;
+		% end
+		var url = "./api/foods/" + entry_id + "?token=" + get_current_token();
+		$.ajax({
+			url: url,
+	        type: "DELETE",
+	        data: JSON.stringify({"id": entry_id}),
+	        success: function(ret_data) {
+	        	create_modal("OK", "Removed entry!");
+	        	$("#tr_" + entry_id).remove();
+	        	fillUserReport();
+	        },
+	        error: function(data){
+	        	create_modal("Error", "Try again or report");
+	        	console.log(data);
+	        },
+	    });
+	}
+	
+	function start_edit_entry(entry_id) {
+		if ($(".editing_entry").length > 0){
+			create_modal("Not allowed", "Edit 1 entry at a time");
+			return;
+		}
+		var entry_row = $("#tr_" + entry_id);
+		entry_row.find(".editable").each(function(){
+			var txt_val = $(this).find("label").text();
+			$(this).empty();
+			$(this).append(
+				$("<input>",
+					{value: txt_val})
+			);
+		});
+		entry_row.find(".edit_entry").attr("onclick",
+											"end_edit_entry(" + entry_id + ");");
+		entry_row.find(".edit_entry").text("Submit");
+		entry_row.find(".edit_entry").addClass('editing_entry');
+	}
+	
+	function end_edit_entry(entry_id) {
+		var entry_row = $("#tr_" + entry_id);
+		var food_entry_info = {
+			"name": entry_row.find("td:eq(0)").find("input").val(),
+			"date_eaten": entry_row.find("td:eq(1)").find("input").val(),
+			"calories": entry_row.find("td:eq(2)").find("input").val(),
+			"price": entry_row.find("td:eq(3)").find("input").val(),
+			"user_id": entry_row.find("td:eq(4)").find("label").text(),
+		}
+		check_entry_errors = get_food_entry_errors(food_entry_info);
+		if (check_entry_errors.length > 0) {
+			create_modal("Errors", check_entry_errors.join(" <br /> "));
+			return;
+		}
+		var frontend_changes_if_update_success = function() {
+			entry_row.find(".editable").each(function(){
+				var txt_val = $(this).find("input").val();
+				$(this).empty();
+				$(this).append(
+					$("<label>",
+						{text: txt_val})
+				);
+			});
+			entry_row.find(".edit_entry").attr("onclick",
+												"start_edit_entry(" + entry_id + ");");
+			entry_row.find(".edit_entry").text("Edit");
+			entry_row.find(".edit_entry").removeClass('editing_entry');
+		}
+		updateFoodEntry(entry_id,
+						food_entry_info,
+						frontend_changes_if_update_success);
+	}
+	
+	function get_food_entry_errors(food_entry_info) {
+		var msgs = [];
+		if(food_entry_info["name"].length === 0){
+			msgs.push("Name must be defined");
+		}
+		if(food_entry_info["date_eaten"].length === 0 || !is_datetime_format(food_entry_info["date_eaten"])){
+			msgs.push("Date must have format YYYY-MM-dd hh:mm:ss");
+		}
+		if( food_entry_info["calories"].length === 0 || isNaN(food_entry_info["calories"]) || parseInt(food_entry_info["calories"]) < 0) {
+			msgs.push("Calories must be a positive number");
+		}
+		if (food_entry_info["price"].length > 0) {
+			if( isNaN(food_entry_info["price"]) || parseInt(food_entry_info["price"]) < 0) {
+				msgs.push("Price must be a positive number");
+			}
+		}
+		return msgs;
+	}
+	
+	function is_datetime_format(date_eaten) {
+		const dt_regex = /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/g;
+		return date_eaten.match(dt_regex);
+	}
+	
+	function sortTableByDateDecreasing() {
+		sortTableByColumnDecreasing(column_index=1);
+	}
+	
+	function sortTableByUserDecreasing() {
+		sortTableByColumnDecreasing(column_index=4, tie_column_index=1);
+	}
+	
+	function sortTableByColumnDecreasing(column_index, tie_column_index=-1) {
+		var table, rows, switching, i, x, y, shouldSwitch;
+		table = document.getElementById("all_foods_table");
+		switching = true;
+		while (switching) {
+			switching = false;
+			rows = table.rows;
+			for (i = 1; i < (rows.length - 1); i++) {
+				shouldSwitch = false;
+				x = rows[i].getElementsByTagName("td")[column_index];
+				y = rows[i + 1].getElementsByTagName("td")[column_index];
+				if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+					shouldSwitch = true;
+					break;
+				}
+				if (tie_column_index !== -1 && x.innerHTML.toLowerCase() === y.innerHTML.toLowerCase()) {
+					tie_x = rows[i].getElementsByTagName("td")[tie_column_index];
+					tie_y = rows[i + 1].getElementsByTagName("td")[tie_column_index];
+					if (tie_x.innerHTML.toLowerCase() < tie_y.innerHTML.toLowerCase()) {
+						shouldSwitch = true;
+						break;
+					}
+				}
+			}
+			if (shouldSwitch) {
+				rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+				switching = true;
+			}
+		}
+	}
+	
+	function create_modal(title, text) {
+		$("#modalBody").html(text);
+		$("#exampleModalTitle").text(title);
+		$('#exampleModal').modal();
+	}
+	
+	function get_today_date_str() {
+		const date_today = new Date();
+		return get_date_to_day_string(date_today);
+	}
+	
+	function get_date_to_day_string(dd) {
+		var day_str = dd.getFullYear() + "-";
+		today_month = dd.getMonth() + 1;
+		if (today_month < 10){
+			day_str += "0";
+		}
+		day_str += today_month + "-";
+		if (dd.getDate() < 10){
+			day_str += "0";
+		}
+		day_str += dd.getDate();
+		return day_str;
+	}
+	
+	function filterDates() {
+		var day_from = $("#date_from_filter").val();
+		if (day_from.length === 0){
+			day_from = "1800-01-01";
+		}
+		var day_to = $("#date_to_filter").val();
+		if (day_to.length === 0) {
+			day_to = get_today_date_str();
+		}
+		$(".food_entry_tr").each(function() {
+			var entry_date = $(this).find("td:eq(1)").find("label").text();
+			const day = entry_date.split(" ")[0];
+			if (day >= day_from && day <= day_to){
+				$(this).show();
+			} else {
+				$(this).hide();
+			}
+		});
+	}
+	
+	function report_total_calories_eaten_today(user_id) {
+		var calories_today = 0;
+		$(".food_entry_tr").each(function() {
+			var entry_date = $(this).find("td:eq(1)").find("label").text();
+			const day = entry_date.split(" ")[0];
+			if (day === get_today_date_str()){
+				calories_today += parseInt($(this).find("td:eq(2)").find("label").text());
+			}
+		});
+		var daily_limit = get_daily_calories_limit(user_id) ;
+		calories_remaining = daily_limit - calories_today;
+		var ret = calories_today.toString();
+		var color_code_class = "";
+		if (calories_remaining > 0) {
+			ret += " (until limit " + calories_remaining.toString() + ")";
+			if (calories_remaining <= 0.2 * daily_limit) {
+				color_code_class = "limit_warning";
+			} else {
+				color_code_class = "limit_ok";
+			}
+		} else if (calories_remaining < 0){
+			ret += " (limit passed by " + (-calories_remaining).toString() + ")";
+			color_code_class = "limit_passed";
+		} else if (calories_remaining === 0){
+			ret += " (limit reached)";
+			color_code_class = "limit_warning";
+		}
+		
+		$("#user_report_calories_today").text(ret);
+		$("#user_report_calories_today").removeAttr('class');
+		$("#user_report_calories_today").addClass(color_code_class);
+	}
+	
+	function report_total_money_spent_this_month(user_id) {
+		var money_spent = 0;
+		$(".food_entry_tr").each(function() {
+			var entry_date = $(this).find("td:eq(1)").find("label").text();
+			const month_and_year = entry_date.split(" ")[0].substr(0, 7);
+			if (month_and_year === get_today_date_str().substr(0, 7)){
+				const row_price = $(this).find("td:eq(3)").find("label").text();
+				if (row_price !== "-") {
+					money_spent += parseInt(row_price);
+				}
+			}
+		});
+		var monthly_limit = {{price_monthly_limit}} ;
+		money_remaining = monthly_limit - money_spent;
+		var ret = "$" + money_spent.toString();
+		var color_code_class = "";
+		if (money_remaining > 0) {
+			ret += " (until limit " + money_remaining.toString() + ")";
+			if (money_remaining <= 0.2 * monthly_limit) {
+				color_code_class = "limit_warning";
+			} else {
+				color_code_class = "limit_ok";
+			}
+		} else if (money_remaining < 0){
+			ret += " (limit passed by $" + (-money_remaining).toString() + ")";
+			color_code_class = "limit_passed";
+		} else if (money_remaining === 0){
+			ret += " (limit reached!)";
+			color_code_class = "limit_warning";
+		}
+		
+		$("#user_report_money_last_month").text(ret);
+		$("#user_report_money_last_month").removeAttr('class');
+		$("#user_report_money_last_month").addClass(color_code_class);
+	}
+	
+	function report_limits(user_id) {
+		var monthly_limit = get_monthly_price_limit(user_id) ;
+		var daily_limit = get_daily_calories_limit(user_id);
+		$("#user_report_constant_limits").text(
+			"Calories daily limit: " + daily_limit.toString() + " ; Monthly price limit: " + monthly_limit.toString());
+	}
+	
+	function report_days_calories_limit_was_passed(user_id) {
+		const calories_by_day = new Map();
+		$(".food_entry_tr").each(function() {
+			if (is_admin()){
+				var row_user_id = $(this).find("td:eq(4)").find("label").text();
+				if (user_id !== row_user_id) {
+					return;
+				}
+			}
+			var entry_date = $(this).find("td:eq(1)").find("label").text();
+			const dmy = entry_date.split(" ")[0];
+			var previous_cals_count = 0;
+			if (calories_by_day.has(dmy)){
+				previous_cals_count = calories_by_day.get(dmy);
+			}
+			calories_by_day.set(dmy,
+								previous_cals_count + parseInt($(this).find("td:eq(2)").find("label").text())
+								);
+		});
+		var daily_limit = get_daily_calories_limit(user_id) ;
+		var days_passed = [];
+		for (const dmy of calories_by_day.entries()) {
+			if (dmy[1] > daily_limit) {
+				days_passed.push(dmy[0]);
+			}
+		}
+		$("#user_report_days_limit_was_passed").text(days_passed.join(", "));
+	}
+	
+	function fillUserReport() {
+		var user_id = -1;
+		if (is_admin()){
+			user_id = $("#user_report_select_user").val();
+		}
+		var daily_limit = get_daily_calories_limit(user_id);
+		
+		report_limits(user_id);
+		report_total_calories_eaten_today(user_id);
+		report_total_money_spent_this_month(user_id);
+		report_days_calories_limit_was_passed(user_id);
+		
+		
+		$("#user_report_last_week_summary").find(".day_row").remove();
+		const date_today = new Date();
+		const days_names = ["Sunday", "Monday", "Tuesday", "Wednesday",
+							"Thursday", "Friday", "Saturday"];
+		var week_calories = 0;
+		var week_money = 0;
+		
+		for(var i = 0; i < 7; i++) {
+			const prev_date = new Date(date_today-i*1000*3600*24);
+			const day_str = get_date_to_day_string(prev_date);
+			var daily_cals = 0;
+			var daily_price = 0;
+			$(".food_entry_tr").each(function() {
+				if (is_admin()) {
+					var row_user_id = $(this).find("td:eq(4)").find("label").text();
+					if (row_user_id !== user_id) {
+						return;
+					}
+				}
+				var entry_date = $(this).find("td:eq(1)").find("label").text();
+				const dmy = entry_date.split(" ")[0];
+				if (dmy === day_str) {
+					daily_cals += parseInt($(this).find("td:eq(2)").find("label").text());
+					const price = $(this).find("td:eq(3)").find("label").text();
+					if (price !== "-") {
+						daily_price += parseInt(price);
+					}
+				}
+			});
+			week_calories += daily_cals;
+			week_money += daily_price;
+			var daily_cals_report = daily_cals.toString() + " (";
+			var calories_cls;
+			if (daily_cals <= daily_limit) {
+				daily_cals_report += (daily_cals - daily_limit).toString()
+				calories_cls = "limit_ok";
+			} else {
+				daily_cals_report += "+" + (daily_cals - daily_limit).toString()
+				calories_cls = "limit_passed";
+			}
+			daily_cals_report += ")";
+			$("#user_report_last_week_summary").append(
+				$("<tr class='day_row'>").append(
+					$("<td>").append(
+						$("<label>").text(days_names[prev_date.getDay()])
+					)
+				).append(
+					$("<td>", {"class": calories_cls}).append(
+						$("<label>").text(daily_cals_report)
+					)
+				).append(
+					$("<td>").append(
+						$("<label>").text(daily_price)
+					)
+				)
+			);
+		}
+		
+		var weekly_cals_report = week_calories.toString() + " (";
+		var calories_cls;
+		if (week_calories <= daily_limit*7) {
+			weekly_cals_report += (week_calories - daily_limit*7).toString()
+			calories_cls = "limit_ok";
+		} else {
+			weekly_cals_report += "+" + (week_calories - daily_limit*7).toString()
+			calories_cls = "limit_passed";
+		}
+		weekly_cals_report += ")";
+		$("#user_report_last_week_summary").append(
+			$("<tr class='day_row'>").append(
+				$("<td>").append(
+					$("<label>").text("Total week")
+				)
+			).append(
+				$("<td>", {"class": calories_cls}).append(
+					$("<label>").text(weekly_cals_report)
+				)
+			).append(
+				$("<td>").append(
+					$("<label>").text(week_money)
+				)
+			)
+		);
+	}
+	
+	function sortTable() {
+		if (is_admin()) {
+			adminSortTable();
+		} else {
+			sortTableByDateDecreasing();
+		}
+	}
+	
+	function adminSortTable() {
+		if ($("#admin_sort_by").val() === "date") {
+			sortTableByDateDecreasing();
+		} else {
+			sortTableByUserDecreasing();
+		}
+	}
+	
+	</script>
+
+</head>
+
+<body>
+
+<div>
+	<h1>Calories tracking</h1>
+	<div id="first_short_div">
+		<div id="new_food_entry">
+			<h3>Create new food entry</h3>
+			<form id="submit_food_entry" >
+				<label for="input_food_name">Food name:</label><br>
+				<input required type="text" id="input_food_name" name="food_name" value=""><br>
+				<label for="input_food_date">Date eaten:</label><br>
+				<input required type="datetime-local" id="input_food_date" name="food_date" value=""><br>
+				<label for="input_food_calories">Calories:</label><br>
+				<input required type="number" id="input_food_calories" name="food_calories" value=""><br>
+				<label for="input_food_price">Price:</label><br>
+				<input type="number" id="input_food_price" name="food_price" value=""><br>
+				% if is_admin:
+					<label for="input_food_user_id">User id:</label><br>
+					<input required type="number" id="input_food_user_id" name="food_user_id" value=""><br>
+				% end
+				<input type="submit" value="Submit food" >
+			</form> 
+		</div>
+		% if is_admin:
+			<div id="admin_report_div">
+				<h3>Admin report</h3>
+				<label>Added entries last week: </label>
+				<label>{{admin_report["added_entries_last_7_days"]}}</label>
+				<br />
+				<label>Added entries previous week: </label>
+				<label>{{admin_report["added_entries_previous_week"]}}</label>
+				<br />
+				<label>Average calories per user last week: </label>
+				<label>{{admin_report["average_calories_per_user_last_week"]}}</label>
+				<br />
+			</div>
+		% end
+		<div id="user_report_div">
+			<h3>User report</h3>
+			% if is_admin:
+				<label>Select user for report:</label>
+				<select id="user_report_select_user"></select>
+				<br />
+			% end
+			<label id="user_report_constant_limits"></label>
+			<br />
+			<label>Total calories ingested today: </label>
+			<label id="user_report_calories_today"></label>
+			<br />
+			<label>Total money spent this month: </label>
+			<label id="user_report_money_last_month"></label>
+			<br />
+			<label>Overall days calories limit was passed: </label>
+			<label id="user_report_days_limit_was_passed"></label>
+			<br />
+			<label>Last week: </label>
+			<table id="user_report_last_week_summary">
+				<tr>
+					<th>Day</th>
+					<th>Calories</th>
+					<th>Money ($)</th>
+				</tr>
+			</table>
+			<br />
+		</div>
+	</div>
+	<h3>Submitted foods</h3>
+	<div id="all_food_entries">
+		<label>Date from:</label>
+		<input type="date" id="date_from_filter" onchange="filterDates();"></input>
+		<label>Date to:</label>
+		<input type="date" id="date_to_filter" onchange="filterDates();"></input>
+		% if is_admin:
+			<label>Sort by:</label>
+			<select id="admin_sort_by" onchange="adminSortTable();">
+				<option value="date">Date</option>
+				<option value="user_id">User id</option>
+			</select>
+		% end
+		<table id="all_foods_table">
+			<tr>
+				<th>Name</th>
+				<th>Date</th>
+				<th>Calories</th>
+				<th>Price</th>
+				% if is_admin:
+					<th>User id</th>
+					<th>Manage</th>
+				% end
+			</tr>
+		</table>
+	</div>
+	
+
+<!-- Modal -->
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exampleModalTitle"></h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="modalBody">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+	
+</div>
+
+<script>
+	showFoods();
+	$(function() {
+	    $('#submit_food_entry').submit(function(e) {
+	    	e.preventDefault(); //STOP default action
+	        createNewFoodEntry();
+	        return false;
+	    }); 
+	});
+	if (is_admin()) {
+		const user_ids = new Set();
+		var first_id = "";
+		$(".food_entry_tr").each(function() {
+			var user_id = $(this).find("td:eq(4)").find("label").text();
+			if (!user_ids.has(user_id)) {
+				if (first_id === ""){
+					first_id = user_id;
+				}
+				$("#user_report_select_user").append(
+					`<option value="${user_id}">
+						${user_id}
+					</option>`
+				);
+				user_ids.add(user_id);
+			}
+		});
+		fillUserReport(first_id);
+		$("#user_report_select_user").change(function() {
+			fillUserReport();
+		});
+	} else {
+		fillUserReport();
+	}
+</script>
+
+</body>
+
+</html>
