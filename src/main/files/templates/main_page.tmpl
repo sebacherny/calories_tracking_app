@@ -1,7 +1,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<titlMain Page</title>
+	<title>Main Page</title>
 	
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
@@ -88,17 +88,22 @@
 	function createNewFoodEntry() {
 		var info = {};	
 		info["name"] = $("#input_food_name").val();
-		info["date_eaten"] = $("#input_food_date").val();
-		info["calories"] = $("#input_food_calories").val();
-		info["price"] = $("#input_food_price").val();
+		info["date_eaten"] = convert_date_to_format_to_show(
+								$("#input_food_date").val()
+							);
+		info["calories"] = parseInt($("#input_food_calories").val());
+		info["price"] = parseFloat($("#input_food_price").val());
 		if (is_admin()) {
 			info["user_id"] = $("#input_food_user_id").val();
 		}
-		var url = "./api/foods?token=" + get_current_token();
+		var url = "./api/foods";
 		$.ajax({
 			url: url,
 	        type: "POST",
 	        data: JSON.stringify(info),
+	        headers: {
+	        	Authorization: 'Bearer ' + get_current_token()
+	        },
 	        success: function(ret_data) {
 	        	info["id"] = ret_data["id"];
 	        	add_entry_to_table(info);
@@ -115,11 +120,14 @@
 	}
 	
 	function updateFoodEntry(entry_id, entry_info, frontend_changes_if_update_success) {
-		var url = "./api/foods/" + entry_id + "?token=" + get_current_token();
+		var url = "./api/foods/" + entry_id;
 		$.ajax({
 			url: url,
 	        type: "PUT",
 	        data: JSON.stringify(entry_info),
+	        headers: {
+	        	Authorization: 'Bearer ' + get_current_token()
+	        },
 	        success: function(ret_data) {
 	        	frontend_changes_if_update_success();
 	        	sortTable();
@@ -193,11 +201,14 @@
 			create_modal("Error 400", "Unable to perform operation");
 			return;
 		% end
-		var url = "./api/foods/" + entry_id + "?token=" + get_current_token();
+		var url = "./api/foods/" + entry_id;
 		$.ajax({
 			url: url,
 	        type: "DELETE",
 	        data: JSON.stringify({"id": entry_id}),
+	        headers: {
+	        	Authorization: 'Bearer ' + get_current_token()
+	        },
 	        success: function(ret_data) {
 	        	create_modal("OK", "Removed entry!");
 	        	$("#tr_" + entry_id).remove();
@@ -275,7 +286,7 @@
 			msgs.push("Calories must be a positive number");
 		}
 		if (food_entry_info["price"].length > 0) {
-			if( isNaN(food_entry_info["price"]) || parseInt(food_entry_info["price"]) < 0) {
+			if( isNaN(food_entry_info["price"]) || parseFloat(food_entry_info["price"]) < 0) {
 				msgs.push("Price must be a positive number");
 			}
 		}
@@ -412,7 +423,7 @@
 			if (month_and_year === get_today_date_str().substr(0, 7)){
 				const row_price = $(this).find("td:eq(3)").find("label").text();
 				if (row_price !== "-") {
-					money_spent += parseInt(row_price);
+					money_spent += parseFloat(row_price);
 				}
 			}
 		});
@@ -514,7 +525,7 @@
 					daily_cals += parseInt($(this).find("td:eq(2)").find("label").text());
 					const price = $(this).find("td:eq(3)").find("label").text();
 					if (price !== "-") {
-						daily_price += parseInt(price);
+						daily_price += parseFloat(price);
 					}
 				}
 			});
@@ -607,9 +618,9 @@
 				<label for="input_food_date">Date eaten:</label><br>
 				<input required type="datetime-local" id="input_food_date" name="food_date" value=""><br>
 				<label for="input_food_calories">Calories:</label><br>
-				<input required type="number" id="input_food_calories" name="food_calories" value=""><br>
+				<input required min=1 type="number" id="input_food_calories" name="food_calories" value=""><br>
 				<label for="input_food_price">Price:</label><br>
-				<input type="number" id="input_food_price" name="food_price" value=""><br>
+				<input type="number" min=0 step=0.01 id="input_food_price" name="food_price" value=""><br>
 				% if is_admin:
 					<label for="input_food_user_id">User id:</label><br>
 					<input required type="number" id="input_food_user_id" name="food_user_id" value=""><br>

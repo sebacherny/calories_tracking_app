@@ -1,14 +1,11 @@
 import MySQLdb
 import settings
 
-DB_HOST = "localhost"
-DB_USER = "root"
-DB_PASSWORD = "root"
-DB_NAME = "calories_db"
-
 def get_database_connection():
-    return MySQLdb.connect(host=DB_HOST, user=DB_USER, passwd=DB_PASSWORD,
-                           db=DB_NAME, charset="utf8")
+    return MySQLdb.connect(host=settings.DB_HOST,
+                           user=settings.DB_USER,
+                           passwd=settings.DB_PASSWORD,
+                           db=settings.DB_NAME, charset="utf8")
 
 
 def get_all_food_entries(user_id=None):
@@ -48,7 +45,6 @@ def delete_food_entry_from_db(food_entry_id):
         conn.commit()
     finally:
         conn.close()
-
 
 def update_db_food_entry(entry_id, name=None, date_eaten=None, calories=None,
                          price=None, user_id=None):

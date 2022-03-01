@@ -1,4 +1,5 @@
-create database if not exists calories_db;
+drop database if exists calories_db;
+create database calories_db;
 
 use calories_db;
 

@@ -7,7 +7,8 @@ import datetime
 from collections import defaultdict
 import os
 import settings
-from rest_api_requests import api_app, serialize_food_entries, token_required
+from rest_api_requests import api_app, serialize_food_entries, \
+    frontend_token_required
 
 main_app = Bottle()
 
@@ -16,7 +17,7 @@ def hello():
     return "Hello World!"
 
 @main_app.route('/main')
-@token_required
+@frontend_token_required
 def first_page(current_user):
     is_admin = current_user["is_admin"]
     user_id = current_user["id"]

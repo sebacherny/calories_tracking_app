@@ -10,18 +10,28 @@ import datetime
 
 api_app = Bottle()
 
-def token_required(f, must_be_admin=False):
+def token_required(f, must_be_admin=False, is_frontend=False):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        # if 'x-access-token' in request.headers:
-        #     token = request.headers['x-access-token']
-        token = request.params.get("token")
-        # return 401 if token is not passed
+        error_msg = ""
+        if is_frontend:
+            token = request.params.get("token")
+        else:
+            if 'Authorization' in request.headers:
+                auth_splitted = request.headers['Authorization'].split(" ")
+                if auth_splitted[0].lower() != "bearer":
+                    error_msg = "Auth header must start with Bearer"
+                elif len(auth_splitted) != 2:
+                    error_msg = "Auth header must contain bearer followed by token"
+                else:
+                    token = auth_splitted[1]
+            else:
+                error_msg = "Missing header in request"
         if not token:
             response.content_type = "application/json"
             response.status = 401
-            return json.dumps({'message' : 'Token is missing !!'})
+            return json.dumps({'message' : error_msg})
         try:
             current_user = [x for x in settings.HARDCODED_USERS
                             if x["token"] == token][0]
@@ -44,6 +54,9 @@ def token_required(f, must_be_admin=False):
 
 def admin_token_required(f):
     return token_required(f, True)
+
+def frontend_token_required(f):
+    return token_required(f, must_be_admin=False, is_frontend=True)
 
 
 def _serialize_db_val(v):
@@ -118,7 +131,7 @@ def create_new_food_entry(current_user):
         response.content_type = "application/json"
         response.status = 400
         return {"message": "Calories must be a positive integer"}
-    if req_json.get("price") and (not isinstance(req_json.get("price"), float) or float(req_json.get("price")) <= 0):
+    if req_json.get("price") and (not isinstance(req_json.get("price"), (int, float,)) or float(req_json.get("price")) <= 0):
         response.content_type = "application/json"
         response.status = 400
         return {"message": "Price must be either empty or a positive number"}
@@ -149,4 +162,5 @@ def update_food_entry(current_user, entry_id):
         return json.dumps(_serialize_db_json(updated_food_entry))
     else:
         # XXX: Should be 400 ?
+        response.status = 400
         return {"message": "Unexistent entry"}

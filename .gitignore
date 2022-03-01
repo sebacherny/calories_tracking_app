@@ -2,3 +2,5 @@ calories_tracking/env/
 .project
 .pydevproject
 __pycache__/
+
+env

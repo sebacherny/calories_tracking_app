@@ -10,3 +10,8 @@ HARDCODED_USERS = [
     {"user": "common_user_2", "token": "user-token-789", "id": 3, "is_admin": False,
      "calories_daily_limit": 2100, "price_monthly_limit": 1000},
 ]
+
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASSWORD = "root"
+DB_NAME = "calories_db"
